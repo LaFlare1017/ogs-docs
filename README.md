@@ -34,8 +34,11 @@ green run there. Findings name the file and line **in this repo**:
 Run it locally from the pair checkout, where `docs/` and `ledger/` are siblings:
 
 ```bash
-rm -f ledger/docs/workspace/FEATURE-SPECS.md   # judge the live file, not the ledger-side pin
+# The live file is judged only while the ledger-side pin is out of the way.
+# Move it aside rather than delete it — it is a tracked file in that repo.
+mv ledger/docs/workspace/FEATURE-SPECS.md /tmp/feature-specs-pin.md
 python ledger/scripts/check_worked_example_counts.py --root ledger
+mv /tmp/feature-specs-pin.md ledger/docs/workspace/FEATURE-SPECS.md
 ```
 
 Repair a red run by restating the count **from the fixture** — never by editing
