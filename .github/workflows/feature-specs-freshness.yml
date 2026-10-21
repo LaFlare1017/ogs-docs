@@ -1,0 +1,101 @@
+# Feature-specs freshness — does the Dashboard's own row still agree with the
+# golden fixture?
+#
+# `research/FEATURE-SPECS.md` is not a document in this repo; it is the LIVE
+# source the Ledger Dashboard parses at runtime (the WS3 row's counts), and the
+# numbers it states are derived from the golden fixture in the sibling `ledger`
+# repository. So this repo can be perfectly self-consistent and still lie to
+# every reader of the Dashboard: the fixture gains a revrec section, this row
+# keeps saying six, and nothing here notices. That is the drift this job exists
+# to catch.
+#
+# Two checkouts, one judgement. The job reproduces the working layout the Ledger
+# repo's own lint expects — `docs/` beside `ledger/` — and runs THAT lint
+# (`ledger/scripts/check_worked_example_counts.py`) rather than a second
+# implementation, so "clean here" cannot mean something else than "clean in the
+# ledger repo's CI". Findings are printed with the `path:line` in THIS repo
+# (`../docs/research/FEATURE-SPECS.md:24`) and the sentence as written.
+#
+# The ledger repo is private, so it is fetched with a read-only deploy key
+# (`LEDGER_DEPLOY_KEY`, added under the ledger repo's Settings → Deploy keys).
+# A missing key is an explicit failure, never a green skip: a check that could
+# not run must not look like agreement.
+#
+# `vars.LEDGER_REF` picks the ledger ref to compare against; it defaults to
+# `erp-gl-posting` because that is the branch the fixture and the lint live on
+# today. Point it at `main` (or a tag) once they are merged there — no edit to
+# this file required.
+#
+# The ledger-side pinned copy of this file (`ledger/docs/workspace/`) exists so
+# the Ledger CI can lint the row in a checkout with no sibling workspace. Here
+# the sibling IS the repo under test, so the pin is removed from the throwaway
+# checkout: the live file is judged, and a pin refresh stays the Ledger repo's
+# business rather than a cross-repo commit every time a sentence changes.
+
+name: feature-specs-freshness
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Daily: the fixture can move in the ledger repo without this one changing.
+    - cron: "20 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feature-specs-freshness
+  cancel-in-progress: true
+
+jobs:
+  feature-specs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LEDGER_REPO: LaFlare1017/ledger
+    steps:
+      - name: Check out this repo at docs/
+        uses: actions/checkout@v4
+        with:
+          path: docs
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ssh-keyscan pins github.com's host key for the clone below; no
+      # third-party action is trusted with the deploy key's private half.
+      - name: Clone the golden fixture's repo at ledger/
+        env:
+          LEDGER_DEPLOY_KEY: ${{ secrets.LEDGER_DEPLOY_KEY }}
+          LEDGER_REF: ${{ vars.LEDGER_REF || 'erp-gl-posting' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LEDGER_DEPLOY_KEY}" ]; then
+            echo "::error title=Missing deploy key::LEDGER_DEPLOY_KEY is not set, so the golden fixture could not be read and no claim was checked. Add the private half as a repository secret; add the public half to ${LEDGER_REPO} as a read-only deploy key."
+            exit 1
+          fi
+          mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$LEDGER_DEPLOY_KEY" > "$HOME/.ssh/ledger_key"
+          chmod 600 "$HOME/.ssh/ledger_key"
+          ssh-keyscan -t ed25519 github.com >> "$HOME/.ssh/known_hosts"
+          GIT_SSH_COMMAND="ssh -i $HOME/.ssh/ledger_key -o IdentitiesOnly=yes" \
+            git clone --depth 1 --branch "$LEDGER_REF" \
+              "git@github.com:${LEDGER_REPO}.git" ledger
+          echo "compared against ${LEDGER_REPO}@${LEDGER_REF}"
+
+      # The lint's per-example split leg shells out to the ledger's golden runner,
+      # which imports the app's money code. Pinned versions, same file the ledger
+      # CI installs, so the leg measures here exactly as it does there.
+      - name: Install the ledger's pinned dependencies
+        run: python -m pip install --quiet -r ledger/requirements.txt
+
+      - name: Judge this repo's FEATURE-SPECS against the fixture
+        run: |
+          set -euo pipefail
+          # See the header: the live file is the one the Dashboard reads.
+          rm -f ledger/docs/workspace/FEATURE-SPECS.md
+          python ledger/scripts/check_worked_example_counts.py --root ledger
