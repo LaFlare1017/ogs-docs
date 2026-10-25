@@ -14,8 +14,8 @@ pair checkout); this repo is what the product and its reviewers quote.
 ## The gate: `feature-specs-freshness`
 
 [`.github/workflows/feature-specs-freshness.yml`](.github/workflows/feature-specs-freshness.yml)
-fails when `research/FEATURE-SPECS.md` disagrees with the golden fixture in the
-`ledger` repo (`fixtures/golden-contract-01/golden_contract.json`). The fixture
+fails when `research/FEATURE-SPECS.md` disagrees with the golden fixture in
+the `ledger` repo (`fixtures/golden-contract-01/golden_contract.json`). The fixture
 defines how many worked revrec examples exist; a sentence here that counts them
 is a claim about that fixture, and a seventh section makes today's "six" false
 without anyone touching this repo.
@@ -31,15 +31,22 @@ green run there. Findings name the file and line **in this repo**:
 ../docs/research/FEATURE-SPECS.md:24: says 'seven sections' but the golden fixture pins 6 worked example(s)
 ```
 
-Run it locally from the pair checkout, where `docs/` and `ledger/` are siblings:
+Run it locally from the pair checkout, where `docs/` and `ledger/` are
+siblings. The lint reads `research/FEATURE-SPECS.md` **here** — this repo is the
+only copy, so there is nothing to move aside first:
 
 ```bash
-# The live file is judged only while the ledger-side pin is out of the way.
-# Move it aside rather than delete it — it is a tracked file in that repo.
-mv ledger/docs/workspace/FEATURE-SPECS.md /tmp/feature-specs-pin.md
 python ledger/scripts/check_worked_example_counts.py --root ledger
-mv /tmp/feature-specs-pin.md ledger/docs/workspace/FEATURE-SPECS.md
 ```
+
+The arrangement is symmetric: the `ledger` repo's CI checks THIS repo out
+read-only (`.github/actions/checkout-docs`, deploy key `DOCS_DEPLOY_KEY`, ref
+from its `DOCS_REF` variable) and lints the same file at the same path, so a
+governance edit is one commit in one repo and both gates judge it on the next
+run. No copy of this file lives in the `ledger` repo. That key's public half
+belongs **here** (Settings → Deploy keys, **write access OFF**) — the ledger
+side holds only the secret with the private half, so the checkout can read this
+repo and never write to it.
 
 Repair a red run by restating the count **from the fixture** — never by editing
 the fixture to match the sentence, and never by silencing the lint. A line that

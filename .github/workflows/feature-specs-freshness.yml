@@ -26,11 +26,11 @@
 # today. Point it at `main` (or a tag) once they are merged there — no edit to
 # this file required.
 #
-# The ledger-side pinned copy of this file (`ledger/docs/workspace/`) exists so
-# the Ledger CI can lint the row in a checkout with no sibling workspace. Here
-# the sibling IS the repo under test, so the pin is removed from the throwaway
-# checkout: the live file is judged, and a pin refresh stays the Ledger repo's
-# business rather than a cross-repo commit every time a sentence changes.
+# There is no copy of this file in the `ledger` repo: its CI checks THIS repo
+# out read-only beside its checkout (`.github/actions/checkout-docs` there) and
+# lints the live row, so the bytes judged here and the bytes judged there are
+# the same ones. This job therefore judges the live file directly — the sibling
+# IS the repo under test, and there is no pin to clear from the checkout first.
 
 name: feature-specs-freshness
 
@@ -96,6 +96,6 @@ jobs:
       - name: Judge this repo's FEATURE-SPECS against the fixture
         run: |
           set -euo pipefail
-          # See the header: the live file is the one the Dashboard reads.
-          rm -f ledger/docs/workspace/FEATURE-SPECS.md
+          # See the header: the live file is the one the Dashboard reads, and
+          # the lint resolves it one directory above the ledger checkout.
           python ledger/scripts/check_worked_example_counts.py --root ledger
